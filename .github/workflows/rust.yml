@@ -1,64 +1,45 @@
-name: Rust CI
+name: Build
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-env:
-  CARGO_TERM_COLOR: always
+on: [push, pull_request]
 
 jobs:
-  build:
-
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        target: [x86_64-unknown-linux-gnu, x86_64-pc-windows-msvc]
-        include:
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-            android: true
-
-    runs-on: ${{ matrix.os }}
-
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Install Dependencies
-      if: matrix.android == 'true'
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget unzip
-        wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
-        unzip android-ndk-r22b-linux-x86_64.zip
-        rm android-ndk-r22b-linux-x86_64.zip
-        rustup target add aarch64-linux-android
+        sudo apt-get install -y protobuf-compiler cmake
 
-    - name: Install Protobuf (Linux)
-      if: runner.os == 'Linux'
-      run: sudo apt-get install -y protobuf-compiler
+    - name: Build for Linux
+      run: cargo build --release --target x86_64-unknown-linux-gnu --features "browser,rustls-tls-webpki-roots"
 
-    - name: Install Rust Targets (Non-Android)
-      if: matrix.android != 'true'
-      run: rustup target add ${{ matrix.target }}
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-    - name: Set Up Cargo Configuration for Android
-      if: matrix.android == 'true'
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Install protoc
       run: |
-        printf '\n[target.aarch64-linux-android]\nlinker = "aarch64-linux-android30-clang"\n' >> $HOME/.cargo/config.toml
+        choco install protoc --version=3.14.0
 
-    - name: Build
-      run: |
-        if [ ${{ matrix.android }} == 'true' ]; then
-          PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH \
-          cargo build -p vsd --release --target ${{ matrix.target }} --no-default-features --features "rustls-tls-native-roots"
-        else
-          cargo build -p vsd --release --target ${{ matrix.target }} --features "native-tls"
-        fi
-
-    - name: Run Tests
-      if: matrix.android != 'true'
-      run: cargo test --verbose
+    - name: Build for Windows
+      run: cargo build --release --target x86_64-pc-windows-msvc --features "browser,rustls-tls-webpki-roots"
