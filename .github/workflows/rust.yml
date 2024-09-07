@@ -43,12 +43,23 @@ jobs:
         override: true
         target: ${{ matrix.target }}
 
-    # Install dependencies for Linux (Ubuntu)
-    - name: Install Dependencies (Linux)
+    # Install protoc for Linux (Ubuntu)
+    - name: Install Protoc (Linux)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential clang protobuf-compiler wget unzip
+        sudo apt-get install -y protobuf-compiler build-essential clang wget unzip
+
+    # Install protoc for macOS
+    - name: Install Protoc (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install protobuf
+
+    # Install protoc for Windows
+    - name: Install Protoc (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install protoc
 
     # Install Android NDK for Android build
     - name: Install Android NDK
