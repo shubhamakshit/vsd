@@ -71,6 +71,7 @@ jobs:
         run: |
           export PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
           export PKG_CONFIG_PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/lib/pkgconfig
+          export OPENSSL_DIR=/usr/local/ssl  # Adjust as needed based on OpenSSL location
 
       - name: Build for Android
         run: |
@@ -136,9 +137,11 @@ jobs:
           profile: minimal
           override: true
 
-      - name: Install Dependencies
+      - name: Install protoc
         run: |
-          choco install protobuf
+          Invoke-WebRequest -Uri https://github.com/protocolbuffers/protobuf/releases/download/v21.11/protoc-21.11-win64.zip -OutFile protoc.zip
+          Expand-Archive protoc.zip -DestinationPath $env:ProgramFiles
+          [System.Environment]::SetEnvironmentVariable("PATH", "$env:PATH;$env:ProgramFiles\protoc-21.11-win64\bin", [System.EnvironmentVariableTarget]::Machine)
 
       - name: Build for Windows
         run: |
