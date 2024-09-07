@@ -1,11 +1,13 @@
-name: Build
+name: Build and Upload Executables
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   build-linux:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -18,53 +20,21 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
-
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler cmake
 
     - name: Build for Linux
-      run: cargo build --release --target x86_64-unknown-linux-gnu --features "browser,rustls-tls-webpki-roots"
-
-    - name: Upload Linux Build Artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: linux-build
-        path: target/x86_64-unknown-linux-gnu/release/*
-
-  build-windows:
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        submodules: true
-
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-
-    - name: Install protoc
       run: |
-        choco install protoc --version=3.14.0
+        cargo build --release --target x86_64-unknown-linux-gnu
+        mkdir -p artifacts
+        cp target/x86_64-unknown-linux-gnu/release/vsd artifacts/
 
-    - name: Build for Windows
-      run: cargo build --release --target x86_64-pc-windows-msvc --features "browser,rustls-tls-webpki-roots"
-
-    - name: Upload Windows Build Artifacts
+    - name: Upload Linux Executable
       uses: actions/upload-artifact@v3
       with:
-        name: windows-build
-        path: target/x86_64-pc-windows-msvc/release/*
+        name: linux-executable
+        path: artifacts/vsd
 
   build-macos:
     runs-on: macos-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -77,22 +47,28 @@ jobs:
         toolchain: stable
         profile: minimal
         override: true
+
+    - name: Install Homebrew packages
+      run: |
+        brew install protobuf
 
     - name: Add macOS target
       run: rustup target add x86_64-apple-darwin
 
     - name: Build for macOS
-      run: cargo build --release --target x86_64-apple-darwin --features "browser,rustls-tls-webpki-roots"
+      run: |
+        cargo build --release --target x86_64-apple-darwin
+        mkdir -p artifacts
+        cp target/x86_64-apple-darwin/release/vsd artifacts/
 
-    - name: Upload macOS Build Artifacts
+    - name: Upload macOS Executable
       uses: actions/upload-artifact@v3
       with:
-        name: macos-build
-        path: target/x86_64-apple-darwin/release/*
+        name: macos-executable
+        path: artifacts/vsd
 
   build-android:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -112,17 +88,16 @@ jobs:
         unzip android-ndk-r22b-linux-x86_64.zip
         rm android-ndk-r22b-linux-x86_64.zip
 
-    - name: Add Android target
-      run: rustup target add aarch64-linux-android
-
     - name: Build for Android
       run: |
         export PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
-        export RUSTFLAGS="-C link-args=-Wl,-rpath=/data/data/com.termux/files/usr/lib -C link-args=-Wl,--enable-new-dtags"
-        cargo build --release --target aarch64-linux-android --no-default-features --features "rustls-tls"
+        rustup target add aarch64-linux-android
+        cargo build --release --target aarch64-linux-android
+        mkdir -p artifacts
+        cp target/aarch64-linux-android/release/vsd artifacts/
 
-    - name: Upload Android Build Artifacts
+    - name: Upload Android Executable
       uses: actions/upload-artifact@v3
       with:
-        name: android-build
-        path: target/aarch64-linux-android/release/*
+        name: android-executable
+        path: artifacts/vsd
