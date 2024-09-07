@@ -21,6 +21,11 @@ jobs:
         profile: minimal
         override: true
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+
     - name: Build for Linux
       run: |
         cargo build --release --target x86_64-unknown-linux-gnu
@@ -82,6 +87,11 @@ jobs:
         profile: minimal
         override: true
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y protobuf-compiler
+
     - name: Install Android NDK
       run: |
         wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
@@ -101,3 +111,37 @@ jobs:
       with:
         name: android-executable
         path: artifacts/vsd
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Install Protobuf
+      run: |
+        choco install protoc
+
+    - name: Add Windows target
+      run: rustup target add x86_64-pc-windows-msvc
+
+    - name: Build for Windows
+      run: |
+        cargo build --release --target x86_64-pc-windows-msvc
+        mkdir artifacts
+        cp target/x86_64-pc-windows-msvc/release/vsd.exe artifacts/
+
+    - name: Upload Windows Executable
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-executable
+        path: artifacts/vsd.exe
