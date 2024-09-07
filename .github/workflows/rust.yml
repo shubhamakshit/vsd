@@ -1,7 +1,10 @@
-name: Build and Upload Executables
+name: Build and Test
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
@@ -9,139 +12,143 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        submodules: true
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
 
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config protobuf-compiler
 
-    - name: Build for Linux
-      run: |
-        cargo build --release --target x86_64-unknown-linux-gnu
-        mkdir -p artifacts
-        cp target/x86_64-unknown-linux-gnu/release/vsd artifacts/
+      - name: Build for Linux
+        run: |
+          cargo build --release
+          mkdir -p artifacts
+          cp target/release/vsd artifacts/
 
-    - name: Upload Linux Executable
-      uses: actions/upload-artifact@v3
-      with:
-        name: linux-executable
-        path: artifacts/vsd
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        submodules: true
-
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
-
-    - name: Install Homebrew packages
-      run: |
-        brew install protobuf
-
-    - name: Add macOS target
-      run: rustup target add x86_64-apple-darwin
-
-    - name: Build for macOS
-      run: |
-        cargo build --release --target x86_64-apple-darwin
-        mkdir -p artifacts
-        cp target/x86_64-apple-darwin/release/vsd artifacts/
-
-    - name: Upload macOS Executable
-      uses: actions/upload-artifact@v3
-      with:
-        name: macos-executable
-        path: artifacts/vsd
+      - name: Upload Linux Executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-executable
+          path: artifacts/vsd
 
   build-android:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        submodules: true
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
 
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y protobuf-compiler
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config protobuf-compiler
 
-    - name: Install Android NDK
-      run: |
-        wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
-        unzip android-ndk-r22b-linux-x86_64.zip
-        rm android-ndk-r22b-linux-x86_64.zip
+      - name: Install Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
+          unzip android-ndk-r22b-linux-x86_64.zip
+          rm android-ndk-r22b-linux-x86_64.zip
 
-    - name: Build for Android
-      run: |
-        export PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
-        rustup target add aarch64-linux-android
-        cargo build --release --target aarch64-linux-android
-        mkdir -p artifacts
-        cp target/aarch64-linux-android/release/vsd artifacts/
+      - name: Set up cross-compilation environment
+        run: |
+          export PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+          export PKG_CONFIG_PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/lib/pkgconfig
 
-    - name: Upload Android Executable
-      uses: actions/upload-artifact@v3
-      with:
-        name: android-executable
-        path: artifacts/vsd
+      - name: Build for Android
+        run: |
+          rustup target add aarch64-linux-android
+          cargo build --release --target aarch64-linux-android
+          mkdir -p artifacts
+          cp target/aarch64-linux-android/release/vsd artifacts/
+
+      - name: Upload Android Executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-executable
+          path: artifacts/vsd
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install Dependencies
+        run: |
+          brew install protobuf
+
+      - name: Set up protoc
+        run: |
+          brew install protobuf
+
+      - name: Build for macOS
+        run: |
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          mkdir -p artifacts
+          cp target/x86_64-apple-darwin/release/vsd artifacts/
+
+      - name: Upload macOS Executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-executable
+          path: artifacts/vsd
 
   build-windows:
     runs-on: windows-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        submodules: true
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
 
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        override: true
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
 
-    - name: Install Protobuf
-      run: |
-        choco install protoc
+      - name: Install Dependencies
+        run: |
+          choco install protobuf
 
-    - name: Add Windows target
-      run: rustup target add x86_64-pc-windows-msvc
+      - name: Build for Windows
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release --target x86_64-pc-windows-msvc
+          mkdir -p artifacts
+          cp target/x86_64-pc-windows-msvc/release/vsd artifacts/
 
-    - name: Build for Windows
-      run: |
-        cargo build --release --target x86_64-pc-windows-msvc
-        mkdir artifacts
-        cp target/x86_64-pc-windows-msvc/release/vsd.exe artifacts/
-
-    - name: Upload Windows Executable
-      uses: actions/upload-artifact@v3
-      with:
-        name: windows-executable
-        path: artifacts/vsd.exe
+      - name: Upload Windows Executable
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-executable
+          path: artifacts/vsd
