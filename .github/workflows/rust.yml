@@ -108,7 +108,7 @@ jobs:
           PATH=/content/musl-cross-make/output/bin:$PATH x86_64-linux-musl-readelf ./target/x86_64-unknown-linux-musl/release/vsd --dynamic
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: vsd-executable
           path: |
