@@ -1,4 +1,4 @@
-name: Build and Upload Executables
+name: Build and Upload Artifacts
 
 on:
   push:
@@ -10,120 +10,48 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    strategy:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+ strategy:
       matrix:
-        target:
-          - any
-          - android-linux
-          - android-termux
-          - darwin
-          - linux-musl
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.target }}
+        profile: minimal
 
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+    - name: Install dependencies on Ubuntu
+      if: matrix.os == 'ubuntu-latest'
+      run |
+        sudo apt update
+        sudo apt install -y protobuf-compiler cmake clang
 
-      - name: Clean up existing directory
-        run: |
-          if [ -d "vsd" ]; then
-            rm -rf vsd
-          fi
+    - name: Install dependencies on macOS
+      if: matrix == 'macos-latest'
+      run: |
+        brew update
+ brew install protobuf cmake clang
 
-      - name: Install dependencies (Any Target)
-        if: matrix.target == 'any'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-          rustup component add rustfmt
-          git clone https://github.com/clitic/vsd --recursive --depth 1
-          cd vsd
-          cargo build -p vsd --release
+    - name: Install dependencies on Windows
+      if: matrix.os == 'windows-latest'
+      run: |
+        vcpkg install protobuf cmake
 
-      - name: Install dependencies (Android on Linux)
-        if: matrix.target == 'android-linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget unzip
-          wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
-          unzip android-ndk-r22b-linux-x86_64.zip
-          rm android-ndk-r22b-linux-x86_64.zip
-          rustup target add aarch64-linux-android
-          printf '\n[target.aarch64-linux-android]\nlinker = "aarch64-linux-android30-clang"\n' >> $HOME/.cargo/config.toml
-          PATH=$PWD/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH \
-          RUSTFLAGS="-C link-args=-Wl,-rpath=/data/data/com.termux/files/usr/lib -C link-args=-Wl,--enable-new-dtags" \
-          cargo build -p vsd --release --target aarch64-linux-android --no-default-features --features "rustls-tls"
+    - name: Build the project
+      run: |
+        cargo build --release
 
-      - name: Install dependencies (Android on Termux)
-        if: matrix.target == 'android-termux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://f-droid.org/repo/com.termux_117.apk -O termux.apk
-          sudo apt-get install -y adb
-          adb install termux.apk
-          adb shell "pkg upgrade -y"
-          adb shell "pkg install git protobuf rust -y"
-          git clone https://github.com/clitic/vsd --recursive --depth 1
-          cd vsd
-          AR=llvm-ar \
-          OPENSSL_INCLUDE_DIR=$PREFIX/include/openssl \
-          OPENSSL_LIB_DIR=$PREFIX/lib \
-          OPENSSL_NO_VENDOR=true \
-          cargo build -p vsd --release --no-default-features --features "native-tls"
-
-      - name: Install dependencies (Darwin on Linux)
-        if: matrix.target == 'darwin'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential curl llvm
-          git clone https://github.com/tpoechtrager/osxcross
-          curl -L https://github.com/joseluisq/macosx-sdks/releases/download/13.1/MacOSX13.1.sdk.tar.xz -o osxcross/tarballs/MacOSX13.1.sdk.tar.xz
-          cd osxcross
-          sudo ./tools/get_dependencies.sh
-          sudo UNATTENDED=1 SDK_VERSION=13.1 ./build.sh
-          sudo ENABLE_COMPILER_RT_INSTALL=1 ./build_compiler_rt.sh
-          rustup target add x86_64-apple-darwin
-          printf '\n[target.x86_64-apple-darwin]\nlinker = "x86_64-apple-darwin21.4-clang"\n' >> $HOME/.cargo/config.toml
-          PATH=$PWD/osxcross/target/bin:$PATH \
-          LD_LIBRARY_PATH=$PWD/osxcross/target/lib:$LD_LIBRARY_PATH \
-          MACOSX_DEPLOYMENT_TARGET=13.1 \
-          CC=x86_64-apple-darwin21.4-clang \
-          CXX=x86_64-apple-darwin21.4-clang++ \
-          AR=x86_64-apple-darwin21.4-ar \
-          cargo build -p vsd --release --target x86_64-apple-darwin
-          llvm-readobj ./target/x86_64-apple-darwin/release/vsd --macho-version-min --needed-libs
-
-      - name: Install dependencies (Linux with MUSL)
-        if: matrix.target == 'linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential
-          git clone https://github.com/richfelker/musl-cross-make --depth 1
-          cd musl-cross-make
-          TARGET=x86_64-linux-musl make install
-          find musl-cross-make/output/**/*/libstdc++.so* | xargs rm
-          rustup target add x86_64-unknown-linux-musl
-          printf '\n[target.x86_64-unknown-linux-musl]\nlinker = "x86_64-linux-musl-gcc"\n' >> $HOME/.cargo/config.toml
-          PATH=$PWD/musl-cross-make/output/bin:$PATH \
-          CC=x86_64-linux-musl-gcc \
-          CXX=x86_64-linux-musl-g++ \
-          AR=x86_64-linux-musl-ar \
-          cargo build -p vsd --release --target x86_64-unknown-linux-musl --no-default-features --features "browser,rustls-tls-webpki-roots"
-          PATH=$PWD/musl-cross-make/output/bin:$PATH x86_64-linux-musl-readelf ./target/x86_64-unknown-linux-musl/release/vsd --dynamic
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: vsd-executable
-          path: |
-            ./target/x86_64-unknown-linux-musl/release/vsd
-            ./target/x86_64-apple-darwin/release/vsd
-            ./target/aarch64-linux-android/release/vsd
-            ./target/x86_64-unknown-linux-gnu/release/vsd  # Add other paths if needed
+    - name Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: vsd-${{ matrix.os }}-${{ matrix.target }}
+        path: target/release/
+        retention-days: 
