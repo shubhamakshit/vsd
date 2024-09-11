@@ -1,4 +1,4 @@
-name: Build and Upload Artifacts
+name: Build
 
 on:
   push:
@@ -10,50 +10,45 @@ on:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
+        platform: [ubuntu-latest, macos-latest]
+        rust: [stable, nightly]
+    runs-on: ${{ matrix.platform }}
+    
     steps:
-    - name: Checkout repository
-      uses: actions/@v3
-      
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-       : rustfmt
-        target: ${{ matrix.target }}
-        profile: minimal
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
 
-    - name: Install dependencies on Ubuntu
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt update
-        sudo apt install -y protobufcompiler cmake clang
+      - name: Build
+        run: cargo build --release
 
-    - name: Install dependencies on macOS
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew update
-        brew install protobuf cmake clang
+      - name: Run tests
+        run: cargo test
 
-    - name: Install dependencies on Windows
-      if: matrix.os == 'windows-latest'
-      run: |
-        choco install protoc
-        choco install cmake
-        choco install llvm
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Build the project
-      run: |
-        cargo build --release
+      - name: Set up Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
+          unzip android-ndk-r22b-linux-x86_64.zip
+          export ANDROID_NDK_HOME=$PWD/android-ndk-r22b
+          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
- - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: vsd-${ matrix.os }}
-        path: target/release/*
+      - name: Add rust target
+        run: rustup target add aarch64-linux-android
+
+      - name: Build for Android
+        run: |
+          RUSTFLAGS="-C link-args=-Wl,-rpath=/data/data/com.termux/files/usr/lib -C link-args=-Wl,--enable-new-dtags" \
+          cargo build -p vsd --release --target aarch64-linux-android
