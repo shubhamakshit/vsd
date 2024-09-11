@@ -86,9 +86,9 @@ jobs:
           git clone https://github.com/tpoechtrager/osxcross
           curl -L https://github.com/joseluisq/macosx-sdks/releases/download/13.1/MacOSX13.1.sdk.tar.xz -o osxcross/tarballs/MacOSX13.1.sdk.tar.xz
           cd osxcross
-          ./tools/get_dependencies.sh
-          UNATTENDED=1 SDK_VERSION=13.1 ./build.sh
-          ENABLE_COMPILER_RT_INSTALL=1 ./build_compiler_rt.sh
+          sudo ./tools/get_dependencies.sh
+          sudo UNATTENDED=1 SDK_VERSION=13.1 ./build.sh
+          sudo ENABLE_COMPILER_RT_INSTALL=1 ./build_compiler_rt.sh
           rustup target add x86_64-apple-darwin
           printf '\n[target.x86_64-apple-darwin]\nlinker = "x86_64-apple-darwin21.4-clang"\n' >> $HOME/.cargo/config.toml
           PATH=$PWD/osxcross/target/bin:$PATH \
