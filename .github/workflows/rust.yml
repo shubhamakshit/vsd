@@ -1,43 +1,62 @@
- name: Build and Upload Artifacts
+name: Cross Compile
 
- on:
-   push:
-     branches:
-       - main
-   pull_request:
-     branches:
-       - main
+on: [push, pull_request]
 
- jobs:
-   build:
-     runs-on: ubuntu-latest
-     strategy:
-       matrix:
-         target: [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-musl" ]
-     steps:
-       - name: Checkout repository
-         uses: actions/checkout@v2
-
-       - name: Install dependencies
-         run: |
-           sudo apt-get update
-           sudo apt-get install -y build-essential protobuf-compiler llvm
-
-       - name: Install Rust
-         uses: actions-rs/toolchain@v1
-         with:
-           toolchain: stable
-           target: ${{ matrix.target }}
-           profile: minimal
-
-       - name: Add Rust target
-         run: rustup target add ${{ matrix.target }}
-
-       - name: Build project
-         run: cargo build --release --target ${{ matrix.target }}
-
-       - name: Upload artifact
-         uses: actions/upload-artifact@v3
-         with:
-           name: vsd-${{ matrix.target }}
-           path: target/${{ matrix.target }}/release/vsd
+jobs:
+  android-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget unzip
+      - name: Install Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
+          unzip android-ndk-r22b-linux-x86_64.zip
+          rm android-ndk-r22b-linux-x86_64.zip
+      - name: Set up rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: aarch64-linux-android
+          override: true
+      - name: Build for Android
+        run: |
+          printf '\n[target.aarch64-linux-android]\nlinker = "aarch64-linux-android30-clang"\n' >> $HOME/.cargo/config.toml
+          PATH=/content/android-ndk-r22b/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH \
+          RUSTFLAGS="-C link-args=-Wl,-rpath=/data/data/com.termux/files/usr/lib -C link-args=-Wl,--enable-new-dtags" \
+          cargo build -p vsd --release --target aarch64-linux-android --no-default-features --features "rustls-tls"
+          
+  darwin-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git curl llvm
+      - name: Install osxcross
+        run: |
+          git clone https://github.com/tpoechtrager/osxcross
+          curl -L https://github.com/joseluisq/macosx-sdks/releases/download/13.1/MacOSX13.1.sdk.tar.xz -o osxcross/tarballs/MacOSX13.1.sdk.tar.xz
+          cd osxcross
+          ./tools/get_dependencies.sh
+          UNATTENDED=1 SDK_VERSION=13.1 ./build.sh
+      - name: Set up rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: x86_64-apple-darwin
+          override: true
+      - name: Build for Darwin
+        run: |
+          printf '\n[target.x86_64-apple-darwin]\nlinker = "x86_64-apple-darwin21.4-clang"\n' >> $HOME/.cargo/config.toml
+          PATH=/content/osxcross/target/bin:$PATH \
+          LD_LIBRARY_PATH=/content/osxcross/target/lib:$LD_LIBRARY_PATH \
+          MACOSX_DEPLOYMENT_TARGET=13.1 \
+          CC=x86_64-apple-darwin21.4-clang \
+          CXX=x86_64-apple-darwin21.4-clang++ \
+          AR=x86_64-apple-darwin21.4-ar \
+          cargo build -p vsd --release --target x86_64-apple-darwin
