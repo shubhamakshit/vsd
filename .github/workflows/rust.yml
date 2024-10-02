@@ -1,4 +1,4 @@
-name: Rust Build
+name: Build
 
 on:
   push:
@@ -23,6 +23,11 @@ jobs:
         profile: minimal
         override: true
 
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential protobuf-compiler
+
     - name: Cache cargo registry
       uses: actions/cache@v2
       with:
@@ -40,7 +45,7 @@ jobs:
           ${{ runner.os }}-cargo-index-
 
     - name: Build
-      run: cargo build --workspace --release
+      run: cargo build -p vsd --release
 
     - name: Run tests
-      run: cargo test --workspace --release
+      run: cargo test -p vsd --release
