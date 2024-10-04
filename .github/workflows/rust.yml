@@ -1,4 +1,4 @@
-name: Build
+name: Build with MUSL
 
 on:
   push:
@@ -13,41 +13,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v2
-      with:
-        submodules: recursive
 
-    - name: Set up Rust
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential curl
+
+    - name: Build musl cross toolchain
+      run: |
+        git clone https://github.com/richfelker/musl-cross-make --depth 1
+        cd musl-cross-make
+        make TARGET=x86_64-linux-musl install
+        find output/**/*/libstdc++.so* -exec rm {} \;
+
+    - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        profile: minimal
         override: true
 
-    - name: Install Build Dependencies
+    - name: Add rustup target x86_64-unknown-linux-musl
       run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential protobuf-compiler
+        rustup target add x86_64-unknown-linux-musl
+        printf '\n[target.x86_64-unknown-linux-musl]\nlinker = "x86_64-linux-musl-gcc"\n' >> $HOME/.cargo/config.toml
 
-    - name: Cache cargo registry
-      uses: actions/cache@v2
+    - name: Build vsd project
+      run: |
+        export PATH=$PWD/musl-cross-make/output/bin:$PATH
+        export CC=x86_64-linux-musl-gcc
+        export CXX=x86_64-linux-musl-g++
+        export AR=x86_64-linux-musl-ar
+        cargo build -p vsd --release --target x86_64-unknown-linux-musl --no-default-features --features "browser,rustls-tls-webpki-roots"
+
+    - name: Verify build
+      run: |
+        export PATH=$PWD/musl-cross-make/output/bin:$PATH
+        x86_64-linux-musl-readelf ./target/x86_64-unknown-linux-musl/release/vsd --dynamic
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
       with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-
-    - name: Cache cargo index
-      uses: actions/cache@v2
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
-
-    - name: Build
-      run: cargo build -p vsd --release
-
-    - name: Run tests
-      run: cargo test -p vsd --release
+        name: vsd
+        path: ./target/x86_64-unknown-linux-musl/release/vsd
